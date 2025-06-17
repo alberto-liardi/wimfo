@@ -1,0 +1,152 @@
+# After changing this file, check it on:
+#   http://lint.travis-ci.org/
+#
+language: python
+
+python:
+  # We don't actually use the Travis Python, but this keeps it organized.
+  - "3.5"
+  - "3.6"
+  - "3.7"
+  - "3.8"
+  - "nightly"
+
+os:
+  - linux
+
+matrix:
+  fast_finish: true
+
+  include:
+    - os: osx
+      language: generic
+      python: "3.8"
+      env: OPTIONAL_DEPS=true TRAVIS_PYTHON_VERSION="3.8" SLOW=true
+    - os: osx
+      language: generic
+      python: "3.8"
+      env: OPTIONAL_DEPS=false TRAVIS_PYTHON_VERSION="3.8" SLOW=true
+    - os: osx
+      language: generic
+      python: "pypy3"
+      env: OPTIONAL_DEPS=false TRAVIS_PYTHON_VERSION="pypy3"
+
+  allow_failures:
+    # pypy Wheels are not yet available.
+    - python: "pypy3"
+    - python: "nightly"
+    - env: OPTIONAL_DEPS=false TRAVIS_PYTHON_VERSION="pypy3"
+
+env:
+  matrix:
+    - OPTIONAL_DEPS=true
+    - OPTIONAL_DEPS=false
+
+before_install:
+  ### Prepare the system to install prerequisites or dependencies
+  - uname -a
+  - printenv
+  - echo $TRAVIS_OS_NAME
+  - if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then
+      sudo apt-get update -qq;
+    elif [[ "$TRAVIS_OS_NAME" == "osx" ]]; then
+      brew update;
+      if [[ "$TRAVIS_PYTHON_VERSION" =~ pypy.* ]]; then
+        brew install $TRAVIS_PYTHON_VERSION;
+      fi;
+    fi
+
+  # We do this conditionally because it saves us some downloading if the
+  # version is the same.
+  - if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then
+      echo "On linux";
+      wget https://repo.continuum.io/miniconda/Miniconda3-latest-Linux-x86_64.sh -O miniconda.sh;
+    elif [[ "$TRAVIS_OS_NAME" == "osx" ]]; then
+      echo "On OSX";
+      wget https://repo.continuum.io/miniconda/Miniconda3-latest-MacOSX-x86_64.sh -O miniconda.sh;
+    fi
+  - if [[ "$TRAVIS_PYTHON_VERSION" =~ (2|3)\..* ]]; then
+      bash miniconda.sh -b -p $HOME/miniconda;
+      export PATH="$HOME/miniconda/bin:$PATH";
+      hash -r;
+      conda config --set always_yes yes --set changeps1 no;
+      true; %conda update -q conda;
+      conda info -a;
+    fi
+
+install:
+  ### Install any prerequisites or dependencies necessary to run the build.
+  - if [[ "$TRAVIS_PYTHON_VERSION" =~ (2|3)\..* ]]; then
+      conda create -q -n test-environment python=$TRAVIS_PYTHON_VERSION pip numpy;
+      if [ "${OPTIONAL_DEPS}" == "true" ]; then
+        conda install -n test-environment Cython;
+      fi;
+      source activate test-environment;
+    else
+      if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then
+        sudo apt-get build-dep python-numpy python-scipy python-cvxopt;
+      fi;
+      if [[ "$TRAVIS_PYTHON_VERSION" =~ pypy.* ]]; then
+        sudo $TRAVIS_PYTHON_VERSION -m pip install git+https://bitbucket.org/pypy/numpy.git;
+      else
+        pip install --ignore-installed --upgrade pip numpy;
+      fi;
+      if [ "${OPTIONAL_DEPS}" == "true" ]; then
+        pip install --upgrade Cython;
+      fi;
+    fi;
+
+before_script:
+  ### Use this to prepare your build for testing
+  - if [[ "$TRAVIS_PYTHON_VERSION" =~ (2|3)\..* ]]; then
+      conda install scipy cvxopt;
+      pip install --upgrade --ignore-installed -r requirements_testing.txt;
+    elif [[ "$TRAVIS_PYTHON_VERSION" == "nightly" ]]; then
+      pip install scipy cvxopt;
+      pip install --upgrade --ignore-installed -r requirements_testing.txt;
+    elif [[ "$TRAVIS_PYTHON_VERSION" =~ pypy.* ]]; then
+      sudo $TRAVIS_PYTHON_VERSION -m pip install --ignore-installed -r requirements_testing.txt;
+    fi;
+
+script:
+  - printenv PWD
+  - if ! [[ "$TRAVIS_PYTHON_VERSION" =~ pypy.* ]]; then
+      pip install .;
+    else
+      sudo $TRAVIS_PYTHON_VERSION -m pip install .;
+    fi
+  - if ! [[ "$TRAVIS_PYTHON_VERSION" =~ pypy.* ]]; then
+      if [ "${OPTIONAL_DEPS}" == "true" ]; then
+        pip install -r requirements_optional.txt;
+      fi;
+    fi;
+
+  # Run pytest.
+  - if [[ "$TRAVIS_PYTHON_VERSION" =~ pypy.* ]]; then
+      if [ "${OPTIONAL_DEPS}" == "true" ]; then
+        sudo $TRAVIS_PYTHON_VERSION -m pytest .;
+      else
+        sudo $TRAVIS_PYTHON_VERSION -m pytest -m "not cython" .;
+      fi
+    else
+      if [ "${OPTIONAL_DEPS}" == "true" ]; then
+        if [ "${SLOW}" == "true" ]; then
+          pytest -m "not slow" .;
+        else
+          pytest .;
+        fi
+      else
+        if [ "${SLOW}" == "true" ]; then
+          pytest -m "not cython and not slow" .;
+        else
+          pytest -m "not cython" .;
+        fi
+      fi
+    fi
+
+after_success:
+  - python fixcoverage.py ".*/dit/" "$TRAVIS_BUILD_DIR/dit/"
+  - codecov
+
+notifications:
+  email: false

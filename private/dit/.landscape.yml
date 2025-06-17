@@ -1,0 +1,11 @@
+ignore-paths:
+  - dit/abc.py
+  - dit/utils/exitstack.py
+ignore-patterns:
+  - __init__.py
+requirements:
+  - requirements.txt
+python-targets:
+  - 2
+  - 3
+max-line-length: 100

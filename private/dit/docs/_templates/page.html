@@ -1,0 +1,11 @@
+{# We extend page.html instead of layout.html because readthedocs uses its
+   own layout.html.  See https://github.com/rtfd/readthedocs.org/issues/152
+   for more details.  Essentially, in order to get our changes in, we must
+   not extend layout.html.
+#}
+{% extends "!page.html" %}
+{% block extrahead %}
+    <link href="https://maxcdn.bootstrapcdn.com/font-awesome/4.7.0/css/font-awesome.min.css" rel="stylesheet" integrity="sha384-wvfXpqpZZVQGK6TAh5PVlGOfQNHSoD2xbE+QkPxCAFlNEevoEH3Sl0sibVcOQVnN" crossorigin="anonymous">
+    <script type="text/javascript" src="{{ pathto('_static/copybutton.js', 1) }}"></script>
+{{ super() }}
+{% endblock %}

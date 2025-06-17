@@ -1,0 +1,14 @@
+name: dit
+
+dependencies:
+  - colorama
+  - matplotlib
+  - numpy >= 1.6
+  - scipy >= 0.15
+  - pip:
+    - boltons
+    - debtcollector
+    - hypothesis
+    - ipython[nbconvert]
+    - python-ternary
+    - sarge
