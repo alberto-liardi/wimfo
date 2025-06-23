@@ -1,3 +1,5 @@
 # $\mathcal{W}$- and $\mathcal{M}$-information
 
-![Alt text](wimfo_logo.png)
+<div align="center">
+  <img src="wimfo_logo.png" alt="Alt text" width="50%">
+</div>
