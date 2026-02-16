@@ -87,7 +87,7 @@ def double_union_discrete(P, verbose=False, **kwargs):
         # if verbose: print(MI)
         return MI
 
-    result = minimize(loss, Q, method="newton-exact")  # 'newton-cg'
+    result = minimize(loss, Q, method="newton-exact", options={"custom_wolfe": True})  # 'newton-cg'
 
     x = result.x
     if not result.success:

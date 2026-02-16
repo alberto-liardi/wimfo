@@ -87,6 +87,7 @@ def _minimize_newton_cg(
     callback=None,
     disp=0,
     return_all=False,
+    custom_wolfe=False,
 ):
     """Minimize a scalar function of one or more variables using the
     Newton-Raphson method, with Conjugate Gradient for the linear inverse
@@ -183,7 +184,9 @@ def _minimize_newton_cg(
             x = x + update
         elif line_search == "strong-wolfe":
             # strong-wolfe line search
-            _, _, t, ls_nevals = strong_wolfe(dir_evaluate, x, lr, d, f, g)
+            _, _, t, ls_nevals = strong_wolfe(
+                dir_evaluate, x, lr, d, f, g, custom=custom_wolfe
+            )
             update = d.mul(t)
             x = x + update
         else:
