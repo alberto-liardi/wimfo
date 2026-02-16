@@ -10,6 +10,7 @@ def W_M_calculator(
     t=1,
     option="data",
     type="gaussian",
+    nvar=None,
     unit="bits",
     verbose=False,
     optimiser="Adam",
@@ -25,6 +26,7 @@ def W_M_calculator(
     - t (int):                        Future lag step.
     - option (str):                   Either "data" or "distr". For "gaussian", this determines whether a data matrix
                                       or covariance matrix is passed. For "discrete", use a probability distribution or binary data.
+    - nvar (int, optional):           Number of variables. Default is half the dimension of input if option=="distr".
     - unit (str, optional):           Unit of information. Either "bits" or "nats". Default is "bits".
     - verbose (bool, optional):       If True, prints additional information during computation. Default is False.
     - optimiser (str, optional):      Optimiser to use. Options are "Adam" or "Newton". For large systems (>15 variables), use "Adam".
@@ -47,7 +49,15 @@ def W_M_calculator(
             N = input.shape[0]
             input = get_cov(input, t=t)
         else:
-            N = input.shape[0] // 2
+            if nvar is None:
+                N = input.shape[0] // 2
+            else:
+                N = input.shape[0] - nvar
+                assert isinstance((input.shape[0]-nvar)//nvar, int) or isinstance((input.shape[0]-nvar)//nvar, np.int), \
+                f"Error in the input dimension of the system: {nvar} was given, "
+                f"but the covariance is {input.shape[0]}x{input.shape[1]}."
+                if verbose:
+                    print(f"Assuming the system has past of dimension {(input.shape[0]-nvar)//nvar}")
 
         tdmi = tdmi_from_cov(input, xdim=N)
         W = double_union(
