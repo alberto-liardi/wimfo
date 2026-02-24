@@ -1,7 +1,7 @@
 import numpy as np
 
 from dit import Distribution
-from dit.pid import *
+from dit.pid import PID_BROJA
 
 from wimfo.utils.phiid_lattice import get_lattice
 from wimfo.discrete.double_union_discrete import double_union_discrete
@@ -21,6 +21,8 @@ def get_PID_MI(pid):
 
 
 def broja_phiid_discrete(probs, verbose=False, **kwargs):
+
+    probs+=1e-12 # alleviate numerical instabilities
 
     out_joint_PID = [
         "00A",
@@ -87,8 +89,14 @@ def broja_phiid_discrete(probs, verbose=False, **kwargs):
 
     ## Calculate PhiID union information
     double_union = np.nan
-    while np.isnan(double_union):
-        double_union = double_union_discrete(probs, verbose, **kwargs)
+    limit = 10
+    while np.isnan(double_union) and limit > 0:
+        if limit == 10:
+            p0 = probs
+        else:
+            p0 = None
+        double_union = double_union_discrete(probs, p0, verbose, **kwargs)
+        limit-=1
     if verbose:
         print(f"Broja double union is {double_union}")
 

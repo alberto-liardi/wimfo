@@ -5,6 +5,14 @@ def get_lattice(Ixa, Ixb, Iya, Iyb, Ixya, Ixyb, Ixab, Iyab, Ixyab, Rxytab, Rxyta
     """
     Calculate PhiID lattice and return the PhiID atoms. 
     """
+    
+    if np.isnan(double_union):
+        from warnings import warn
+        warn("Warning: Double union is NaN, cannot calculate lattice. Check convergence of double union optimisation.")
+        return {"rtr": np.nan, "rta": np.nan, "rtb": np.nan, "rts": np.nan,
+                "xtr": np.nan, "xta": np.nan, "xtb": np.nan, "xts": np.nan,
+                "ytr": np.nan, "yta": np.nan, "ytb": np.nan, "yts": np.nan,
+                "str": np.nan, "sta": np.nan, "stb": np.nan, "sts": np.nan}
 
     rtr, rta, rtb, rts = sp.var('rtr rta rtb rts')
     xtr, xta, xtb, xts = sp.var('xtr xta xtb xts')
@@ -21,7 +29,7 @@ def get_lattice(Ixa, Ixb, Iya, Iyb, Ixya, Ixyb, Ixab, Iyab, Ixyab, Rxytab, Rxyta
         rtr + rtb + xtr + xtb + ytr + ytb + str + stb - Ixyb,
         rtr + xtr + rta + xta + rtb + xtb + rts + xts - Ixab,
         rtr + ytr + rta + yta + rtb + ytb + rts + yts - Iyab,
-        rtr+xtr+ytr+str+ rta+xta+yta+sta+ rtb+xtb+ytb+stb+ rts+xts+yts+sts - Ixyab,
+        rtr + xtr + ytr + str + rta + xta + yta + sta + rtb + xtb + ytb + stb + rts + xts + yts + sts - Ixyab,
         rtr + rta + rtb + rts - Rxytab,
         rtr + rta - Rxyta,
         rtr + rtb - Rxytb,

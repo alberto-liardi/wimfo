@@ -70,13 +70,17 @@ def project(Q, P):
     return Q
 
 
-def double_union_discrete(P, verbose=False, **kwargs):
+def double_union_discrete(P, P0=None, verbose=False, **kwargs):
 
     if not isinstance(P, torch.Tensor):
         P = torch.tensor(P, dtype=torch.float64)
 
-    # Initialize joint distribution Q as a random tensor
-    Q = torch.rand(2, 2, 2, 2, requires_grad=True)
+    if P0 is None:
+        # Initialize joint distribution Q as a random tensor
+        Q = torch.rand(2, 2, 2, 2, requires_grad=True)
+    else:
+        Q = torch.tensor(P0, dtype=torch.float64, requires_grad=True)
+
     P_tensor = P.reshape((2, 2, 2, 2))
 
     def loss(Q):
