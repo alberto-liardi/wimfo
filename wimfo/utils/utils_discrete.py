@@ -151,12 +151,93 @@ def test_pmf():
 
     return probs
 
-def estimate_discrete_distribution(x1, x2, y1, y2):
+import numpy as np
+
+def test_pmf_n(n, noise=2**-32):
     """
-    Estimate the joint probability distribution of 4 binary time series.
+    Build toy PMFs over (X0, X1, Y0, Y1) in {0,...,n-1}^4, shape (n,n,n,n).
+    Returns a dict of numpy arrays with known union behavior.
+    """
+    N = n**4
+
+    def with_noise_mask(mask_count):
+        # Allocate noise to all N states, then assign equal mass p to mask_count states
+        if noise == 0.0:
+            # No noise: p is uniform over valid states, zeros elsewhere
+            p = 1.0 / mask_count
+            return p, 0.0
+        # Otherwise, ensure total sums to 1
+        p = (1.0 - noise * (N - mask_count)) / mask_count
+        return p, noise
+
+    # Independent: exact uniform
+    Independent = np.full((n, n, n, n), 1.0 / N, dtype=np.float64)
+
+    # COPY_both: Y0 = X0 and Y1 = X1 (n^2 valid states)
+    p, nz = with_noise_mask(n**2)
+    COPY_both = np.full((n, n, n, n), nz, dtype=np.float64)
+    for x0 in range(n):
+        for x1 in range(n):
+            COPY_both[x0, x1, x0, x1] = p
+
+    # COPY_single: Y0 = X0, Y1 free (n^3 valid states)
+    p, nz = with_noise_mask(n**3)
+    COPY_single = np.full((n, n, n, n), nz, dtype=np.float64)
+    for x0 in range(n):
+        for x1 in range(n):
+            for y1 in range(n):
+                COPY_single[x0, x1, x0, y1] = p
+
+    # transfer: Y0 = X1, Y1 free (n^3 valid states)
+    p, nz = with_noise_mask(n**3)
+    transfer = np.full((n, n, n, n), nz, dtype=np.float64)
+    for x0 in range(n):
+        for x1 in range(n):
+            for y1 in range(n):
+                transfer[x0, x1, x1, y1] = p
+
+    p, nz = with_noise_mask(n**3)
+    down_XOR = np.full((n, n, n, n), nz, dtype=np.float64)
+    for x0 in range(n):
+        for x1 in range(n):
+            y0 = (x0 + x1) % n
+            for y1 in range(n):
+                down_XOR[x0, x1, y0, y1] = p
+
+    # SUM_DIFF: Y0 = (X0 + X1) mod n, Y1 = (X0 - X1) mod n (n^2 valid states), synergy-only
+    p, nz = with_noise_mask(n**2)
+    SUM_DIFF = np.full((n, n, n, n), nz, dtype=np.float64)
+    for x0 in range(n):
+        for x1 in range(n):
+            y0 = (x0 + x1) % n
+            y1 = (x0 - x1) % n
+            SUM_DIFF[x0, x1, y0, y1] = p
+
+    p, nz = with_noise_mask(n**3)
+    up_XOR = np.full((n, n, n, n), nz, dtype=np.float64)
+    for y0 in range(n):
+        for y1 in range(n):
+            x0 = (y0 + y1) % n
+            for x1 in range(n):
+                up_XOR[x0, x1, y0, y1] = p
+
+    return {
+        "Independent": Independent,
+        "COPY_transfer": COPY_single,
+        "COPY": COPY_both,
+        "transfer": transfer,
+        "XOR": SUM_DIFF,
+        "up_XOR": up_XOR,
+        "down_XOR": down_XOR,
+    }
+
+def estimate_discrete_distribution(x1, x2, y1, y2, alph_size=2):
+    """
+    Estimate the joint probability distribution of 4 discrete time series.
     
     Parameters:
-    - x1, x2, y1, y2: Lists or 1D numpy arrays of the same length, containing binary values (0 or 1).
+    - x1, x2, y1, y2: Lists or 1D numpy arrays of the same length, containing discrete values.
+    - alph_size: The size of the alphabet (number of discrete values each variable can take). Default is 2.
     
     Returns:
     - A 2x2x2x2 numpy array representing the joint probability distribution.
@@ -169,7 +250,7 @@ def estimate_discrete_distribution(x1, x2, y1, y2):
         raise ValueError("All input time series must have the same length.")
     
     # Initialize a 2x2x2x2 matrix to store joint counts
-    joint_counts = np.zeros((2, 2, 2, 2))
+    joint_counts = np.zeros((alph_size, alph_size, alph_size, alph_size))
     
     # Count occurrences of each combination
     for i in range(len(x1)):
@@ -180,18 +261,19 @@ def estimate_discrete_distribution(x1, x2, y1, y2):
     
     return joint_probabilities
 
-def discrete_MI(P):
+def discrete_MI(P, n=2):
     """
     Calculate the mutual information I(X;Y) from a joint distribution P(X1, X2, Y1, Y2).
 
     Parameters:
-    - P: ndarray of shape (2, 2, 2, 2), joint probability distribution.
+    - P: ndarray of shape (n, n, n, n), joint probability distribution.
+    - n: The size of each dimension of the joint distribution. Default is 2.
 
     Returns:
     - Mutual information (in bits) as a float.
     """
     if P.ndim == 1:
-        P = P.reshape((2, 2, 2, 2))
+        P = P.reshape((n, n, n, n))
 
     P_X = np.sum(P, axis=(2, 3))  # Marginal over Y1, Y2
     P_Y = np.sum(P, axis=(0, 1))  # Marginal over X1, X2

@@ -11,6 +11,7 @@ def W_M_calculator(
     option="data",
     type="gaussian",
     nvar=None,
+    alphabet_size=2,
     unit="bits",
     verbose=False,
     optimiser="Adam",
@@ -27,6 +28,7 @@ def W_M_calculator(
     - option (str):                   Either "data" or "distr". For "gaussian", this determines whether a data matrix
                                       or covariance matrix is passed. For "discrete", use a probability distribution or binary data.
     - nvar (int, optional):           Number of variables. Default is half the dimension of input if option=="distr".
+    - alphabet_size (int, optional):  Size of the alphabet for discrete data. Default is 2.
     - unit (str, optional):           Unit of information. Either "bits" or "nats". Default is "bits".
     - verbose (bool, optional):       If True, prints additional information during computation. Default is False.
     - optimiser (str, optional):      Optimiser to use. Options are "Adam" or "Newton". For large systems (>15 variables), use "Adam".
@@ -71,15 +73,25 @@ def W_M_calculator(
             assert (
                 input.shape[0] == 4
             ), "Discrete data must have 4 rows (source 1, source 2, target 1, target 2)."
-            if not np.all(np.isin(input, [0, 1])):
+            if np.unique(input).size > alphabet_size:
                 print(
-                    "Warning: Discrete data should be binary (0 or 1). Converting to binary."
+                    "Warning: Detected continuous data. Converting it to binary."
                 )
                 input = (input > input.mean(input, axis=1, keepdims=True)).astype(int)
-            input = estimate_discrete_distribution(*input)
+                alphabet_size = 2
+            input = estimate_discrete_distribution(*input, alph_size=alphabet_size)
 
-        tdmi = discrete_MI(input)
-        W = double_union_discrete(input, verbose=verbose, **kwargs)
+        tdmi = discrete_MI(input, n=alphabet_size)
+        W = double_union_discrete(input, Q=(input+1e-3)/(input+1e-3).sum(), n=alphabet_size, 
+                                optimiser=optimiser, options=options, verbose=verbose, **kwargs)
+        if np.isnan(W):
+            l = 10
+            while l>0:
+                W = double_union_discrete(input, Q=None, n=alphabet_size, verbose=verbose, 
+                                          optimiser=optimiser, options=options, **kwargs)
+                if not np.isnan(W):
+                    l = -1
+                l -= 1
         M = tdmi - W
 
     else:
