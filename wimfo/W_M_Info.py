@@ -14,8 +14,8 @@ def W_M_calculator(
     alphabet_size=2,
     unit="bits",
     verbose=False,
-    optimiser="Adam",
-    options={"atol": 1e-4, "rtol": 1e-4},
+    optimiser=None,
+    options=None,
     **kwargs,
 ):
     """
@@ -31,7 +31,8 @@ def W_M_calculator(
     - alphabet_size (int, optional):  Size of the alphabet for discrete data. Default is 2.
     - unit (str, optional):           Unit of information. Either "bits" or "nats". Default is "bits".
     - verbose (bool, optional):       If True, prints additional information during computation. Default is False.
-    - optimiser (str, optional):      Optimiser to use. Options are "Adam" or "Newton". For large systems (>15 variables), use "Adam".
+    - optimiser (str, optional):      Optimiser to use. For Gaussian, options are "Adam" or "Newton". For large systems (>15 variables), use "Adam".
+                                      For discrete, options are "Mirror" or "Adam". Default is "Adam" for Gaussian and "Mirror" for discrete.
     - options (dict, optional):       Dictionary of options for the optimiser. Default is None.
 
     Returns:
@@ -39,9 +40,17 @@ def W_M_calculator(
     - float:                          M-information (in bits or nats).
     """
 
-
     if unit not in ["bits", "nats"]:
         raise ValueError(f"Unit must be either 'bits' or 'nats', {unit} was passed.")
+
+    if optimiser is None:
+        if type == "gaussian":
+            optimiser = "Adam"
+        elif type == "discrete":
+            optimiser = "Mirror"
+
+    if options is None and optimiser == "Adam":
+        options = {"atol": 1e-4, "rtol": 1e-4}
 
     # gaussian data
     if type == "gaussian":
@@ -55,11 +64,14 @@ def W_M_calculator(
                 N = input.shape[0] // 2
             else:
                 N = input.shape[0] - nvar
-                assert isinstance((input.shape[0]-nvar)//nvar, int) or isinstance((input.shape[0]-nvar)//nvar, np.int), \
-                f"Error in the input dimension of the system: {nvar} was given, "
+                assert isinstance((input.shape[0] - nvar) // nvar, int) or isinstance(
+                    (input.shape[0] - nvar) // nvar, np.int
+                ), f"Error in the input dimension of the system: {nvar} was given, "
                 f"but the covariance is {input.shape[0]}x{input.shape[1]}."
                 if verbose:
-                    print(f"Assuming the system has past of dimension {(input.shape[0]-nvar)//nvar}")
+                    print(
+                        f"Assuming the system has past of dimension {(input.shape[0]-nvar)//nvar}"
+                    )
 
         tdmi = tdmi_from_cov(input, xdim=N)
         W = double_union(
@@ -74,21 +86,33 @@ def W_M_calculator(
                 input.shape[0] == 4
             ), "Discrete data must have 4 rows (source 1, source 2, target 1, target 2)."
             if np.unique(input).size > alphabet_size:
-                print(
-                    "Warning: Detected continuous data. Converting it to binary."
-                )
+                print("Warning: Detected continuous data. Converting it to binary.")
                 input = (input > input.mean(input, axis=1, keepdims=True)).astype(int)
                 alphabet_size = 2
             input = estimate_discrete_distribution(*input, alph_size=alphabet_size)
 
         tdmi = discrete_MI(input, n=alphabet_size)
-        W = double_union_discrete(input, Q=(input+1e-3)/(input+1e-3).sum(), n=alphabet_size, 
-                                optimiser=optimiser, options=options, verbose=verbose, **kwargs)
+        W = double_union_discrete(
+            input,
+            Q=(input + 1e-3) / (input + 1e-3).sum(),
+            n=alphabet_size,
+            optimiser=optimiser,
+            options=options,
+            verbose=verbose,
+            **kwargs,
+        )
         if np.isnan(W):
             l = 10
-            while l>0:
-                W = double_union_discrete(input, Q=None, n=alphabet_size, verbose=verbose, 
-                                          optimiser=optimiser, options=options, **kwargs)
+            while l > 0:
+                W = double_union_discrete(
+                    input,
+                    Q=None,
+                    n=alphabet_size,
+                    verbose=verbose,
+                    optimiser=optimiser,
+                    options=options,
+                    **kwargs,
+                )
                 if not np.isnan(W):
                     l = -1
                 l -= 1
@@ -99,6 +123,10 @@ def W_M_calculator(
             f"Type must be either 'gaussian' or 'discrete', {type} was passed."
         )
 
+    if np.isnan(W):
+        print(f"Warning: W-information is NaN. Returning NaN for both W and M.")
+        return np.nan, np.nan
+    
     # convert dimensions if needed
     if unit == "nats":
         W *= np.log(2)

@@ -20,7 +20,9 @@ def get_PID_MI(pid):
     return p, m[1:]
 
 
-def broja_phiid_discrete(probs, verbose=False, **kwargs):
+def broja_phiid_discrete(probs, verbose=False, optimiser="Mirror", **kwargs):
+    n = probs.shape[0]
+    assert probs.shape == (n, n, n, n), "Input probabilities must be of shape (n, n, n, n)"
 
     probs+=1e-12 # alleviate numerical instabilities
 
@@ -95,7 +97,7 @@ def broja_phiid_discrete(probs, verbose=False, **kwargs):
             p0 = probs
         else:
             p0 = None
-        double_union = double_union_discrete(probs, p0, verbose, **kwargs)
+        double_union = double_union_discrete(probs, Q=p0, n=n, verbose=verbose, optimiser=optimiser, **kwargs)
         limit-=1
     if verbose:
         print(f"Broja double union is {double_union}")

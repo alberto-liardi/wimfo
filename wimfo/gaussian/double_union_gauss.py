@@ -143,7 +143,7 @@ def double_union(
     - switch_opt (bool, optional):              If True, will switch to the other optimiser if one fails to converge. Default is True.
 
     Returns:
-    - float:                                    The union information.
+    - float:                                    The union information in nats.
     """
 
     assert isinstance(nx, int), "nx must be an integer."

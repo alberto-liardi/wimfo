@@ -10,9 +10,10 @@ def PhiID(
     t=1,
     option="data",
     type="gaussian",
+    alphabet_size=2,
     unit="bits",
     verbose=False,
-    optimiser="Adam",
+    optimiser=None,
     options={"atol": 1e-4, "rtol": 1e-4},
     **kwargs,
 ):
@@ -25,9 +26,11 @@ def PhiID(
     - t (int):                        Future lag step.
     - option (str):                   Either "data" or "distr". For "gaussian", this determines whether a data matrix
                                       or covariance matrix is passed. For "discrete", use a probability distribution or binary data.
+    - alphabet_size (int, optional):  Size of the alphabet for discrete data. Default is 2.
     - unit (str, optional):           Unit of information. Either "bits" or "nats". Default is "bits".
     - verbose (bool, optional):       If True, prints additional information during computation. Default is False.
-    - optimiser (str, optional):      Optimiser to use. Options are "Adam" or "Newton". For large systems (>15 variables), use "Adam".
+    - optimiser (str, optional):      Optimiser to use. For Gaussian, options are "Adam" or "Newton". For large systems (>15 variables), use "Adam".
+                                      For discrete, options are "Mirror" or "Adam". Default is "Adam" for Gaussian and "Mirror" for discrete.
     - options (dict, optional):       Dictionary of options for the optimiser. Default is None.
 
     Returns:
@@ -38,6 +41,12 @@ def PhiID(
     if unit not in ["bits", "nats"]:
         raise ValueError(f"Unit must be either 'bits' or 'nats', {unit} was passed.")
 
+    if optimiser is None:
+        if type == "gaussian":
+            optimiser = "Adam"
+        elif type == "discrete":
+            optimiser = "Mirror"
+            
     # gaussian data
     if type == "gaussian":
         if option == "data" and input.shape[0] == input.shape[1]:
@@ -55,14 +64,13 @@ def PhiID(
             assert (
                 input.shape[0] == 4
             ), "Discrete data must have 4 rows (source 1, source 2, target 1, target 2)."
-            if not np.all(np.isin(input, [0, 1])):
-                print(
-                    "Warning: Discrete data should be binary (0 or 1). Converting to binary."
-                )
+            if np.unique(input).size > alphabet_size:
+                print("Warning: Detected continuous data. Converting it to binary.")
                 input = (input > input.mean(input, axis=1, keepdims=True)).astype(int)
+                alphabet_size = 2
             input = estimate_discrete_distribution(*input)
 
-        phiid_dict = broja_phiid_discrete(input, verbose=False, **kwargs)
+        phiid_dict = broja_phiid_discrete(input, verbose=False, optimiser=optimiser, **kwargs)
 
     else:
         raise ValueError(
