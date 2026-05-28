@@ -15,14 +15,16 @@ def PhiID(
     verbose=False,
     optimiser=None,
     options={"atol": 1e-4, "rtol": 1e-4},
+    pointwise=False,
+    data=None,
     **kwargs,
 ):
     """
     Compute Broja-PhiID from data or probability distribution.
 
     Parameters:
-    - input (numpy.ndarray):          Data matrix (variables × samples), covariance matrix (if type == "gaussian"),
-                                      or 2×2×2×2 probability distribution (if type == "discrete").
+    - input (numpy.ndarray):          Data matrix (variables x samples), covariance matrix (if type == "gaussian"),
+                                      or 2x2x2x2 probability distribution (if type == "discrete").
     - t (int):                        Future lag step.
     - option (str):                   Either "data" or "distr". For "gaussian", this determines whether a data matrix
                                       or covariance matrix is passed. For "discrete", use a probability distribution or binary data.
@@ -32,6 +34,8 @@ def PhiID(
     - optimiser (str, optional):      Optimiser to use. For Gaussian, options are "Adam" or "Newton". For large systems (>15 variables), use "Adam".
                                       For discrete, options are "Mirror" or "Adam". Default is "Adam" for Gaussian and "Mirror" for discrete.
     - options (dict, optional):       Dictionary of options for the optimiser. Default is None.
+    - pointwise (bool, optional):     If True, computes pointwise PhiID. Default is False. (Only available for Gaussian)
+    - data (numpy.ndarray, optional): Timeseries data for pointwise computation. Default is None.
 
     Returns:
     - dict:                           Broja PhiID atoms (in bits or nats).
@@ -52,10 +56,15 @@ def PhiID(
         if option == "data" and input.shape[0] == input.shape[1]:
             print("Warning: data is square, perhaps you meant to use option='cov'")
         if option == "data":
-            input = get_cov(input, t=t)
+            if pointwise and data is None:
+                input, data = get_cov(input, t=t, ret_data=True)
+            else:
+                input = get_cov(input, t=t)
 
+        if pointwise:
+            assert data.shape[0] == input.shape[0], f"Data dimension {data.shape[0]} does not match covariance dimension {input.shape[0]}."
         phiid_dict = broja_phiid(
-            input, verbose=verbose, optimiser=optimiser, options=options, **kwargs
+            input, verbose=verbose, optimiser=optimiser, options=options, pointwise=pointwise, data=data, **kwargs
         )
 
     # discrete data
@@ -79,7 +88,8 @@ def PhiID(
 
     # convert dimensions if needed
     if unit == "nats":
-        for key in phiid_dict:
-            phiid_dict[key] *= np.log(2)
+        for d in list(phiid_dict):
+            for key in d:
+                d[key] *= np.log(2)
 
     return phiid_dict

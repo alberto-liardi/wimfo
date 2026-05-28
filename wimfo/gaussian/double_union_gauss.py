@@ -129,7 +129,7 @@ def Corr2Params(S, nx, ny):
 
 
 def double_union(
-    cov_P, nx=2, optimiser="Adam", options=None, verbose=False, switch_opt=True
+    cov_P, nx=2, optimiser="Adam", options=None, verbose=False, switch_opt=True, ret_Q=False,
 ):
     """
     Perform optimization to compute the double union information decomposition using the specified optimiser.
@@ -141,7 +141,7 @@ def double_union(
     - options (dict, optional):                 Dictionary of options for the optimiser. Default is None.
     - verbose (bool, optional):                 If True, prints additional information during optimization. Default is False.
     - switch_opt (bool, optional):              If True, will switch to the other optimiser if one fails to converge. Default is True.
-
+    - ret_Q (bool, optional):                   If True, returns the optimised covariance matrix. Default is False.
     Returns:
     - float:                                    The union information in nats.
     """
@@ -229,13 +229,13 @@ def double_union(
                     loss, theta, method="newton-exact", options=opt_params
                 )
                 if result.success:
-                    return float(loss(result.x).detach())
+                    return float(loss(result.x).detach()), result.x
             except Exception as e:
                 if verbose:
                     print(f"Newton optimisation failed due to: {e}")
-        return np.nan
+        return np.nan, None
 
-    loss_val = run_optimizer(optimiser, optim_options, verbose)
+    loss_val, theta_opt = run_optimizer(optimiser, optim_options, verbose)
 
     # If optimization fails and switch_opt is enabled, try the other optimiser
     if np.isnan(loss_val) and switch_opt:
@@ -247,9 +247,26 @@ def double_union(
         # Reset options for the new optimiser
         optim_options = set_options(options.copy() if options else {}, new_opt)
         # Run the optimisation again
-        loss_val = run_optimizer(new_opt, optim_options, verbose)
+        loss_val, theta_opt = run_optimizer(new_opt, optim_options, verbose)
 
-    return loss_val
+    if ret_Q:
+        if theta_opt is None:
+            return np.nan, None
+        # Reconstruct the optimised covariance matrix Q from the final theta
+        Lxx = reals_to_corr_chol(theta_opt[0, : nx * (nx - 1) // 2])
+        Lyx = torch.linalg.solve_triangular(
+            Lxx.transpose(0, 1), cov_XY_P, upper=True, left=False
+        )
+        d = torch.diag(Lyx @ Lyx.transpose(0, 1))
+        Lyy = reals_to_diag_chol(theta_opt[0, nx * (nx - 1) // 2 :], d)
+        L_Q = block(((Lxx, torch.zeros((nx, ny), requires_grad=False)), (Lyx, Lyy))).double()
+        corr_Q = L_Q @ (L_Q.transpose(0, 1)).double()
+        # Undo the normalisation: scale back from correlation to covariance space
+        D_inv = torch.diag(torch.sqrt(torch.diag(cov_P))).double() 
+        cov_Q = D_inv @ corr_Q @ D_inv
+        return loss_val, cov_Q.detach().numpy()
+    else:
+        return loss_val
 
 
 def Adam_optim(
@@ -272,12 +289,12 @@ def Adam_optim(
         elif n > window_size and torch.allclose(
             l, torch.tensor(losses[-window_size:-1]), atol=atol, rtol=rtol
         ):
-            return float(l.detach())
+            return float(l.detach()), theta.detach().clone()
 
     # If the optimisation failed, try to see if it converged for higher tolerances
     # Exit if the optimisation failed early
     if len(losses) < window_size:
-        return np.nan
+        return np.nan, None
     # Check for increased tolerance
     while atol < 1e-1:
         for l in losses[window_size:]:
@@ -288,10 +305,10 @@ def Adam_optim(
             ):
                 if verbose:
                     print(f"Convergence reached with atol={atol} and rtol={rtol}.")
-                return float(l.detach())
+                return float(l.detach()), theta.detach().clone()
         atol *= 10
         rtol *= 10
-    return np.nan
+    return np.nan, None
 
 
 if __name__ == "__main__":

@@ -16,17 +16,20 @@ def W_M_calculator(
     verbose=False,
     optimiser=None,
     options=None,
+    pointwise=False,
+    data=None,
     **kwargs,
 ):
     """
     Compute W- and M-information from data or probability distribution.
 
     Parameters:
-    - input (numpy.ndarray):          Data matrix (variables × samples), covariance matrix (if type == "gaussian"),
-                                      or 2×2×2×2 probability distribution (if type == "discrete").
+    - input (numpy.ndarray):          Data matrix (variables x samples), covariance matrix (if type == "gaussian"),
+                                      or 2x2x2x2 probability distribution (if type == "discrete").
     - t (int):                        Future lag step.
     - option (str):                   Either "data" or "distr". For "gaussian", this determines whether a data matrix
                                       or covariance matrix is passed. For "discrete", use a probability distribution or binary data.
+    - type (str):                     Either "gaussian" or "discrete". Determines the type of input data and method of calculation.
     - nvar (int, optional):           Number of variables. Default is half the dimension of input if option=="distr".
     - alphabet_size (int, optional):  Size of the alphabet for discrete data. Default is 2.
     - unit (str, optional):           Unit of information. Either "bits" or "nats". Default is "bits".
@@ -34,6 +37,8 @@ def W_M_calculator(
     - optimiser (str, optional):      Optimiser to use. For Gaussian, options are "Adam" or "Newton". For large systems (>15 variables), use "Adam".
                                       For discrete, options are "Mirror" or "Adam". Default is "Adam" for Gaussian and "Mirror" for discrete.
     - options (dict, optional):       Dictionary of options for the optimiser. Default is None.
+    - pointwise (bool, optional):     If True, computes pointwise W- and M-information. Default is False.
+    - data (numpy.ndarray, optional): Timeseries data matrix for pointwise computation. Default is None.
 
     Returns:
     - float:                          W-information (in bits or nats).
@@ -58,8 +63,11 @@ def W_M_calculator(
             print("Warning: data is square, perhaps you meant to use option='cov'")
         if option == "data":
             N = input.shape[0]
-            input = get_cov(input, t=t)
-        else:
+            if pointwise and data is None:
+                input, data = get_cov(input, t=t, ret_data=True)
+            else:
+                input = get_cov(input, t=t)
+        elif option == "distr":
             if nvar is None:
                 N = input.shape[0] // 2
             else:
@@ -72,15 +80,50 @@ def W_M_calculator(
                     print(
                         f"Assuming the system has past of dimension {(input.shape[0]-nvar)//nvar}"
                     )
+        else:
+            raise ValueError(
+                f"Option must be either 'data' or 'distr', {option} was passed."
+            )
 
-        tdmi = tdmi_from_cov(input, xdim=N)
-        W = double_union(
-            input, N, verbose=verbose, optimiser=optimiser, options=options
-        ) / np.log(2)
+        tdmi = tdmi_from_cov(input, xdim=N, pointwise=pointwise, data=data)
+        if pointwise and data is not None:
+            assert (
+                data.shape[0] == input.shape[0]
+            ), f"Data dimension {data.shape[0]} does not match covariance dimension {input.shape[0]}."
+            from wimfo.utils.utils_gauss import get_pointwise_union
+
+            W, Q = double_union(
+                input,
+                N,
+                verbose=verbose,
+                optimiser=optimiser,
+                options=options,
+                ret_Q=True,
+            )
+            W = W / np.log(2)
+            pt_W = get_pointwise_union(
+                input, Q, N, input.shape[0] - N, data, verbose=verbose
+            )
+            if verbose:
+                print(
+                    f"W is {W:.6f}, average from pointwise calculations is {np.mean(pt_W):.6f}"
+                )
+                # print(
+                #     f"TDMI is {tdmi[1]:.6f}, average from pointwise calculations is {np.mean(tdmi[0]):.6f}"
+                # )
+            W = pt_W
+            tdmi = tdmi[0]
+        else:
+            W = double_union(
+                input, N, verbose=verbose, optimiser=optimiser, options=options
+            ) / np.log(2)
+
         M = tdmi - W
 
     # discrete data
     elif type == "discrete":
+        if pointwise:
+            print("Warning: Pointwise calculation is not implemented for discrete data. Ignoring pointwise flag.")
         if option == "data":
             assert (
                 input.shape[0] == 4
@@ -123,10 +166,10 @@ def W_M_calculator(
             f"Type must be either 'gaussian' or 'discrete', {type} was passed."
         )
 
-    if np.isnan(W):
+    if np.any(np.isnan(W)):
         print(f"Warning: W-information is NaN. Returning NaN for both W and M.")
         return np.nan, np.nan
-    
+
     # convert dimensions if needed
     if unit == "nats":
         W *= np.log(2)
