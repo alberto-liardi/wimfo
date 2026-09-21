@@ -13,7 +13,7 @@ $\mathcal{W}$- and $\mathcal{M}$-information are scalable measures of lower- and
 ## Installation
 
 ```bash
-git clone <this-repo>
+git clone https://github.com/alberto-liardi/wimfo.git
 cd wimfo
 ./install.sh
 ```
