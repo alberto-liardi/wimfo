@@ -1,10 +1,10 @@
 # $\mathcal{W}$- and $\mathcal{M}$-information
 
+A Python package for calculating $\mathcal{W}$- and $\mathcal{M}$-information.
+
 <div align="center">
   <img src="wimfo_logo.png" alt="Alt text" width="50%">
 </div>
-
-A Python package for calculating $\mathcal{W}$- and $\mathcal{M}$-information.
 
 ## Description
 
