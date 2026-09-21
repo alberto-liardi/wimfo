@@ -36,7 +36,7 @@ W, M = W_M_calculator(data, type="discrete", option="data", alphabet_size=2)
 
 `W_M_calculator` also accepts a covariance matrix or probability distribution directly (`option="distr"`), and can compute pointwise $\mathcal{W}$- and $\mathcal{M}$-information (`pointwise=True`). See the docstring in `wimfo/W_M_Info.py` for the full list of options (optimiser choice, units, future lag, etc.).
 
-For the Partial Information Decomposition built on top of $\mathcal{W}$- and $\mathcal{M}$-information, use:
+For the Integrated Information Decomposition built on top of $\mathcal{W}$- and $\mathcal{M}$-information, use:
 
 ```python
 from wimfo.Broja_PhiID import PhiID
