@@ -2,7 +2,7 @@
 
 A Python package for calculating $\mathcal{W}$- and $\mathcal{M}$-information.
 
-<div align="center">
+<div align="left">
   <img src="wimfo_logo.png" alt="Alt text" width="50%">
 </div>
 
